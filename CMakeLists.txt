@@ -1,4 +1,4 @@
-# Copyright 2022-2023 Antmicro <www.antmicro.com>
+# Copyright 2022-2024 Antmicro <www.antmicro.com>
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -16,6 +16,7 @@ find_package(rclcpp_components REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
+find_package(grabthecam QUIET)
 
 if(NOT grabthecam_FOUND)
     message("grabthecam not found - building it")

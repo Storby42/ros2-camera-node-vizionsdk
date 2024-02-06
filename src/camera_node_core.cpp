@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023 Antmicro <www.antmicro.com>
+ * Copyright (c) 2022-2024 Antmicro <www.antmicro.com>
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -14,12 +14,29 @@ using namespace std::placeholders;
 rcl_interfaces::msg::SetParametersResult
 CameraNode::parameters_set_callback(const std::vector<rclcpp::Parameter> &parameters)
 {
-    RCLCPP_INFO(get_logger(), "Reconfiguring camera");
+    RCLCPP_DEBUG(get_logger(), "Reconfiguring camera");
+    rcl_interfaces::msg::SetParametersResult result;
+    result.successful = true;
+    result.reason = "success";
     for (const auto &parameter : parameters)
     {
         if (parameters_name_to_index.contains(parameter.get_name()))
         {
-            camera->set<int64_t>(parameters_name_to_index[parameter.get_name()], parameter.as_int());
+            try
+            {
+                camera->set<int64_t>(parameters_name_to_index[parameter.get_name()], parameter.as_int());
+            }
+            catch (const grabthecam::CameraException &e)
+            {
+                std::ostringstream oss;
+                oss << "Failed to set parameter [" << parameter.get_name() << "] with value [" << parameter.as_int()
+                    << "]";
+                RCLCPP_ERROR(get_logger(), "%s", oss.str().c_str());
+                RCLCPP_ERROR(get_logger(), "Exception: [%s]", e.what());
+                result.successful = false;
+                result.reason = oss.str();
+                return result;
+            }
         }
         else if (parameter.get_name() == "camera_frame_dim")
         {
@@ -44,13 +61,8 @@ CameraNode::parameters_set_callback(const std::vector<rclcpp::Parameter> &parame
             camera_frame_counter = 0;
             camera_frame_time_point = std::chrono::steady_clock::now();
         }
-        RCLCPP_INFO(get_logger(), "Setting [%s]", parameter.get_name().c_str());
+        RCLCPP_DEBUG(get_logger(), "Setting [%s]", parameter.get_name().c_str());
     }
-
-    rcl_interfaces::msg::SetParametersResult result;
-    result.successful = true;
-    result.reason = "success";
-
     return result;
 }
 
@@ -58,13 +70,12 @@ void CameraNode::camera_get_properties_callback(
     const camera_node::srv::CameraGetProperties::Request::SharedPtr request,
     camera_node::srv::CameraGetProperties::Response::SharedPtr response)
 {
-    for (auto property = camera_node::msg::CameraProperty();
-         const auto &[index, name, type, default_value] : camera->queryProperties())
+    for (auto property = camera_node::msg::CameraProperty(); const auto &queried_property : camera->queryProperties())
     {
-        property.index = index;
-        property.name = name;
-        property.type = static_cast<uint8_t>(type);
-        property.default_value = default_value;
+        property.index = queried_property.id;
+        property.name = queried_property.name;
+        property.type = static_cast<uint8_t>(queried_property.type);
+        property.default_value = queried_property.defaultValue;
 
         response->properties.push_back(property);
     }
@@ -119,19 +130,36 @@ void CameraNode::camera_frame_info_callback()
 
 void CameraNode::prepare_driver_parameters()
 {
-    for (auto &&[index, name, type, default_value] : camera->queryProperties())
+    const std::regex regex("[^A-z0-9\\s]");
+    for (auto &&queried_property : camera->queryProperties())
     {
-        const std::regex regex("[^A-z0-9\\s]");
+        rcl_interfaces::msg::ParameterDescriptor param_descriptor;
+        rcl_interfaces::msg::IntegerRange int_range;
         std::stringstream result;
 
-        std::regex_replace(std::ostream_iterator<char>(result), name.begin(), name.end(), regex, "");
-        name = result.str();
+        std::regex_replace(
+            std::ostream_iterator<char>(result),
+            queried_property.name.begin(),
+            queried_property.name.end(),
+            regex,
+            "");
+        std::string name = result.str();
 
         std::transform(name.begin(), name.end(), name.begin(), [](auto &c) { return std::tolower(c); });
         std::replace(name.begin(), name.end(), ' ', '_');
 
-        parameters_name_to_index[name] = index;
-        declare_parameter<int32_t>("camera_driver_" + name, default_value);
+        parameters_name_to_index["camera_driver_" + name] = queried_property.id;
+
+        // Get current value instead of default
+        camera->get<int64_t>(queried_property.id, queried_property.defaultValue, true);
+
+        // Apply bounds to parameter
+        int_range.step = queried_property.step;
+        int_range.from_value = queried_property.minimum;
+        int_range.to_value = queried_property.maximum;
+        param_descriptor.integer_range.push_back(int_range);
+
+        declare_parameter<int32_t>("camera_driver_" + name, queried_property.defaultValue, param_descriptor);
     }
 }
 
@@ -156,23 +184,28 @@ void CameraNode::generate_mat_mappings()
 
 CameraNode::CameraNode(const rclcpp::NodeOptions &options) : Node("camera_node", options)
 {
+    // Initialize device
     rcl_interfaces::msg::ParameterDescriptor param_descriptor;
     param_descriptor.read_only = true;
     declare_parameter<std::string>("camera_path", "/dev/video0", param_descriptor);
-    declare_parameter<std::vector<int64_t>>("camera_frame_dim", {0, 0});
-    declare_parameter<double>("camera_refresh_rate", 30.0);
-    declare_parameter<double>("camera_info_rate", 0.1);
-
     camera = std::make_unique<grabthecam::CameraCapture>(get_parameter("camera_path").as_string());
-    if (get_parameter("camera_frame_dim").as_integer_array() != std::vector<int64_t>{0, 0})
+
+    // Retrieve properties
+    prepare_driver_parameters();
+    generate_mat_mappings();
+
+    // Set device constraints
+    std::pair<int, int> size = camera->getFormat();
+    declare_parameter<std::vector<int64_t>>("camera_frame_dim", std::vector<int64_t>{size.first, size.second});
+    if (get_parameter("camera_frame_dim").as_integer_array() != std::vector<int64_t>{size.first, size.second})
     {
         camera->setFormat(
             static_cast<uint32_t>(get_parameter("camera_frame_dim").as_integer_array()[0]),
             static_cast<uint32_t>(get_parameter("camera_frame_dim").as_integer_array()[1]));
     }
 
-    prepare_driver_parameters();
-    generate_mat_mappings();
+    declare_parameter<double>("camera_refresh_rate", 30.0);
+    declare_parameter<double>("camera_info_rate", 0.1);
     camera_frame_counter = 0;
     camera_frame_time_point = std::chrono::steady_clock::now();
 
