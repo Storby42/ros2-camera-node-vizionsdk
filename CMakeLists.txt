@@ -16,17 +16,17 @@ find_package(rclcpp_components REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
-find_package(grabthecam QUIET)
 
-if(NOT grabthecam_FOUND)
-    message("grabthecam not found - building it")
-    include(FetchContent)
-    FetchContent_Declare(grabthecam
-        GIT_REPOSITORY https://github.com/antmicro/grabthecam
-        GIT_TAG main
-    )
-    FetchContent_MakeAvailable(grabthecam)
-endif()
+
+# Find VizionSDK package
+find_package(vizionsdk REQUIRED)
+
+# Link libraries
+target_link_libraries(${PROJECT_NAME}
+    PRIVATE
+    vizionsdk::VizionSDK
+)
+
 
 include_directories(
     include
@@ -48,10 +48,6 @@ add_library(${PROJECT_NAME}_component SHARED
     src/camera_node_core.cpp
 )
 
-target_link_libraries(${PROJECT_NAME}_component
-    ${cpp_typesupport_target}
-    grabthecam
-)
 
 ament_target_dependencies(${PROJECT_NAME}_component
     rclcpp

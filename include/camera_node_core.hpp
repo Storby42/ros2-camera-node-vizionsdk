@@ -13,6 +13,10 @@
 #include "sensor_msgs/msg/image.hpp"
 #include "std_msgs/msg/header.hpp"
 
+#include "VizionSDK.h"
+#include <opencv2/highgui.hpp>
+#include <opencv2/opencv.hpp>
+
 namespace camera_node
 {
 

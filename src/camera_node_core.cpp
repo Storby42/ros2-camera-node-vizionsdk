@@ -7,6 +7,8 @@
 #include "camera_node_core.hpp"
 #include <functional>
 #include <regex>
+#include <iostream>
+#include <memory>
 
 namespace camera_node
 {
