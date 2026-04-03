@@ -6,7 +6,6 @@
 
 #include "camera_node/srv/camera_get_properties.hpp"
 #include "camera_node/srv/camera_get_property_details.hpp"
-#include "grabthecam/cameracapture.hpp"
 #include "rcl_interfaces/msg/set_parameters_result.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "rclcpp_components/register_node_macro.hpp"
@@ -42,7 +41,9 @@ namespace camera_node
 class CameraNode : public rclcpp::Node
 {
     /// @brief Camera instance.
-    std::unique_ptr<grabthecam::CameraCapture> camera;
+    // std::unique_ptr<grabthecam::CameraCapture> camera;
+    std::shared_ptr<VxCamera> CamL;
+    std::shared_ptr<VxCamera> CamR;
     /// @brief Mapping of transformed parameter names to v4l2 parameter indices.
     std::map<std::string, int32_t> parameters_name_to_index;
     /// @brief Mapping of cv::Mat types to sensor_msgs image encodings.
@@ -99,6 +100,7 @@ class CameraNode : public rclcpp::Node
      *
      */
     void camera_frame_callback();
+    void camera_frame_callback_stereo();
 
     /**
      * @brief Callback for camera_frame subscriber callback.
