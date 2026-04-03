@@ -13,7 +13,6 @@
 namespace camera_node
 {
 using namespace std::placeholders;
-rcl_interfaces::msg::SetParametersResult
 // CameraNode::parameters_set_callback(const std::vector<rclcpp::Parameter> &parameters)
 // {
 //     RCLCPP_DEBUG(get_logger(), "Reconfiguring camera");
@@ -106,43 +105,46 @@ rcl_interfaces::msg::SetParametersResult
 void CameraNode::camera_frame_callback_stereo()
 {
     int raw_size=0;
-    VxGetImage(cam, raw_data_left, &raw_size, 2500);
-    VxGetImage(cam, raw_data_right, &raw_size, 2500);
-
-    auto frameL = cv::Mat(min_height, min_width, CV_8UC2, raw_data_left);
-    auto frameR = cv::Mat(min_height, min_width, CV_8UC2, raw_data_right);
+    VxGetImage(CamL, raw_data_left, &raw_size, 2500);
+    VxGetImage(CamR, raw_data_right, &raw_size, 2500);
+    cv::Mat frameL;
+    cv::Mat frameR;
+    //auto frameL = cv::Mat(min_height, min_width, CV_8UC2, raw_data_left);
+    //auto frameR = cv::Mat(min_height, min_width, CV_8UC2, raw_data_right);
+    cv::cvtColor(cv::Mat(min_height, min_width, CV_8UC2, raw_data_left), frameL, cv::COLOR_YUV2BGR_UYVY);
+    cv::cvtColor(cv::Mat(min_height, min_width, CV_8UC2, raw_data_right), frameR, cv::COLOR_YUV2BGR_UYVY);
 
     auto base_message = sensor_msgs::msg::Image();
     
     base_message.header = std_msgs::msg::Header();
-    base_message.encoding = cvmat_type_to_str[frameL.type()];
-    base_message.height = frame.rows;
-    base_message.width = frame.cols;
-    base_message.step = static_cast<sensor_msgs::msg::Image::_step_type>(frame.step);
+    // base_message.encoding = cvmat_type_to_str[frameL.type()];
+    base_message.encoding = "bgr8";
+    base_message.height = frameL.rows;
+    base_message.width = frameL.cols;
+    base_message.step = static_cast<sensor_msgs::msg::Image::_step_type>(frameL.step);
     
     auto left_message = base_message;
     auto right_message = base_message;
     left_message.data.assign(frameL.datastart, frameL.dataend);
     right_message.data.assign(frameR.datastart, frameR.dataend);
 
-    camera_frame_left_pub->publish(left_message);
-    camera_frame_right_pub->publish(right_message);
+    camera_left_frame_pub->publish(left_message);
+    camera_right_frame_pub->publish(right_message);
 }
 void CameraNode::camera_frame_callback()
 {
     int raw_size=0;
-    VxGetImage(cam, raw_data_left, &raw_size, 2500);
-
+    VxGetImage(CamL, raw_data_left, &raw_size, 2500);
     auto frameL = cv::Mat(min_height, min_width, CV_8UC2, raw_data_left);
     auto message = sensor_msgs::msg::Image();
     message.header = std_msgs::msg::Header();
-    message.encoding = cvmat_type_to_str[frame.type()];
-    message.height = frame.rows;
-    message.width = frame.cols;
-    message.step = static_cast<sensor_msgs::msg::Image::_step_type>(frame.step);
-    message.data.assign(frame.datastart, frame.dataend);
+    message.encoding = cvmat_type_to_str[frameL.type()];
+    message.height = frameL.rows;
+    message.width = frameL.cols;
+    message.step = static_cast<sensor_msgs::msg::Image::_step_type>(frameL.step);
+    message.data.assign(frameL.datastart, frameL.dataend);
 
-    camera_frame_left_pub->publish(message);
+    camera_left_frame_pub->publish(message);
 }
 
 void CameraNode::camera_frame_loopback_callback(const sensor_msgs::msg::Image &message) { camera_frame_counter++; }
@@ -216,6 +218,52 @@ void CameraNode::generate_mat_mappings()
     }
 }
 
+void CameraNode::shutdown_cameras()
+{
+    RCLCPP_INFO(get_logger(), "Shutting down camera node...");
+    
+    // Stop timers
+    if (camera_frame_clock) {
+        camera_frame_clock->cancel();
+    }
+    if (camera_frame_info_clock) {
+        camera_frame_info_clock->cancel();
+    }
+    
+    // Stop streaming
+    if (CamL) {
+        VxStopStreaming(CamL);
+        RCLCPP_INFO(get_logger(), "Stopped left camera streaming");
+    }
+    if (CamR) {
+        VxStopStreaming(CamR);
+        RCLCPP_INFO(get_logger(), "Stopped right camera streaming");
+    }
+    
+    // Close camera devices
+    if (CamL) {
+        VxClose(CamL);
+        RCLCPP_INFO(get_logger(), "Closed left camera");
+        CamL.reset();
+    }
+    if (CamR) {
+        VxClose(CamR);
+        RCLCPP_INFO(get_logger(), "Closed right camera");
+        CamR.reset();
+    }
+    // Release allocated buffers
+    if (raw_data_left) {
+        delete[] raw_data_left;
+        raw_data_left = nullptr;
+    }
+    if (raw_data_right) {
+        delete[] raw_data_right;
+        raw_data_right = nullptr;
+    }
+    
+    RCLCPP_INFO(get_logger(), "Camera node shutdown complete");
+}
+
 CameraNode::CameraNode(const rclcpp::NodeOptions &options) : Node("camera_node", options)
 {
     // Initialize device
@@ -238,9 +286,9 @@ CameraNode::CameraNode(const rclcpp::NodeOptions &options) : Node("camera_node",
         VxOpen(cam1);
         std::string hwId0;
         std::string hwId1;
-        VxGetHardwareId(cam0, hwId0);
-        VxGetHardwareId(cam1, hwId1);
-        if(get_parameter("camera_id_left") == hwId0 && get_parameter("camera_id_right") == hwId1){
+        VxGetHardwareID(cam0, hwId0);
+        VxGetHardwareID(cam1, hwId1);
+        if(get_parameter("camera_id_left").as_string() == hwId0 && get_parameter("camera_id_right").as_string() == hwId1){
             CamL=cam0;
             CamR=cam1;
         }
@@ -264,8 +312,8 @@ CameraNode::CameraNode(const rclcpp::NodeOptions &options) : Node("camera_node",
         VxStartStreaming(CamR);
     }
 
-    raw_data_left = new uint8_t[640*480*2];
-    raw_data_right = new uint8_t[640*480*2];
+    raw_data_left = new uint8_t[640*480*4];
+    raw_data_right = new uint8_t[640*480*4];
     
     
 
@@ -327,7 +375,10 @@ CameraNode::CameraNode(const rclcpp::NodeOptions &options) : Node("camera_node",
         std::bind(&CameraNode::camera_frame_info_callback, this));
 }
 
-CameraNode::~CameraNode() {}
+CameraNode::~CameraNode()
+{
+    shutdown_cameras();
+}
 } // namespace camera_node
 
 RCLCPP_COMPONENTS_REGISTER_NODE(camera_node::CameraNode)

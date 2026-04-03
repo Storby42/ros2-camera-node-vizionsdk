@@ -4,8 +4,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include "camera_node/srv/camera_get_properties.hpp"
-#include "camera_node/srv/camera_get_property_details.hpp"
 #include "rcl_interfaces/msg/set_parameters_result.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "rclcpp_components/register_node_macro.hpp"
@@ -42,8 +40,13 @@ class CameraNode : public rclcpp::Node
 {
     /// @brief Camera instance.
     // std::unique_ptr<grabthecam::CameraCapture> camera;
+    int min_height = 480;
+    int min_width = 640;
+    uint8_t* raw_data_left;
+    uint8_t* raw_data_right;
     std::shared_ptr<VxCamera> CamL;
     std::shared_ptr<VxCamera> CamR;
+    std::vector<std::string> dev_list;
     /// @brief Mapping of transformed parameter names to v4l2 parameter indices.
     std::map<std::string, int32_t> parameters_name_to_index;
     /// @brief Mapping of cv::Mat types to sensor_msgs image encodings.
@@ -55,11 +58,10 @@ class CameraNode : public rclcpp::Node
     /// @brief Handle for setting Node's internal parameters.
     OnSetParametersCallbackHandle::SharedPtr parameters_set_handle;
     /// @brief Endpoint for camera_get_properties service.
-    rclcpp::Service<camera_node::srv::CameraGetProperties>::SharedPtr camera_get_properties_srv;
     /// @brief Endpoint for camera_get_property_details service.
-    rclcpp::Service<camera_node::srv::CameraGetPropertyDetails>::SharedPtr camera_get_property_details_srv;
     /// @brief Publisher for camera_frame topic. This topic uses sensor_msgs/msg/Image as its template.
-    rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr camera_frame_pub;
+    rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr camera_left_frame_pub;
+    rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr camera_right_frame_pub;
     /// @brief Loopback subscriber for camera_frame topic.
     rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr camera_frame_loopback;
     /// @brief Clock that imposes frequency at which the Node will publish new frames.
@@ -81,24 +83,17 @@ class CameraNode : public rclcpp::Node
      * @param request Request body for this call.
      * @param response Response body for this call.
      */
-    void camera_get_properties_callback(
-        const camera_node::srv::CameraGetProperties::Request::SharedPtr request,
-        camera_node::srv::CameraGetProperties::Response::SharedPtr response);
-
     /**
      * @brief Callback for camera_get_property_details service.
      *
      * @param request Request body for this call.
      * @param response Response body for this call.
      */
-    void camera_get_property_details_callback(
-        const camera_node::srv::CameraGetPropertyDetails::Request::SharedPtr request,
-        camera_node::srv::CameraGetPropertyDetails::Response::SharedPtr response);
-
     /**
      * @brief A callback method that is to be executed every time this Node tries to post to a CameraFrame topic.
      *
      */
+    void shutdown_cameras();
     void camera_frame_callback();
     void camera_frame_callback_stereo();
 
@@ -126,6 +121,12 @@ class CameraNode : public rclcpp::Node
      *
      */
     void generate_mat_mappings();
+
+    /**
+     * @brief Clean shutdown of camera resources.
+     *
+     */
+    
 
 public:
     /**

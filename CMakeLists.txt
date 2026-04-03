@@ -21,13 +21,6 @@ find_package(std_msgs REQUIRED)
 # Find VizionSDK package
 find_package(vizionsdk REQUIRED)
 
-# Link libraries
-target_link_libraries(${PROJECT_NAME}
-    PRIVATE
-    vizionsdk::VizionSDK
-)
-
-
 include_directories(
     include
     ${rclcpp_INCLUDE_DIRS}
@@ -48,6 +41,11 @@ add_library(${PROJECT_NAME}_component SHARED
     src/camera_node_core.cpp
 )
 
+# Link VizionSDK and OpenCV to camera_node_component AFTER the target is created
+target_link_libraries(${PROJECT_NAME}_component
+    ${OpenCV_LIBS}
+    vizionsdk::VizionSDK
+)
 
 ament_target_dependencies(${PROJECT_NAME}_component
     rclcpp
@@ -63,6 +61,7 @@ add_library(frame_fetcher_node SHARED
 target_link_libraries(frame_fetcher_node
     ${cpp_typesupport_target}
     ${OpenCV_LIBS}
+    vizionsdk::VizionSDK
 )
 
 ament_target_dependencies(frame_fetcher_node
