@@ -269,8 +269,8 @@ CameraNode::CameraNode(const rclcpp::NodeOptions &options) : Node("camera_node",
     // Initialize device
     rcl_interfaces::msg::ParameterDescriptor param_descriptor;
     param_descriptor.read_only = true;
-    declare_parameter<std::string>("camera_id_left", "/dev/video0", param_descriptor);
-    declare_parameter<std::string>("camera_id_right", "/dev/video0", param_descriptor);
+    declare_parameter<std::string>("camera_id_left", "16FDC8814A810146", param_descriptor);
+    declare_parameter<std::string>("camera_id_right", "A8A63008A012A184", param_descriptor);
 
     std::vector<std::string> dev_list;
     int deviceCount = VxDiscoverCameraDevices(dev_list);
@@ -286,15 +286,19 @@ CameraNode::CameraNode(const rclcpp::NodeOptions &options) : Node("camera_node",
         VxOpen(cam1);
         std::string hwId0;
         std::string hwId1;
-        VxGetHardwareID(cam0, hwId0);
-        VxGetHardwareID(cam1, hwId1);
+        VxGetSensorUniqueID(cam0, hwId0);
+        VxGetSensorUniqueID(cam1, hwId1);
         if(get_parameter("camera_id_left").as_string() == hwId0 && get_parameter("camera_id_right").as_string() == hwId1){
             CamL=cam0;
             CamR=cam1;
+            RCLCPP_INFO(get_logger(), "Cam L Unique ID=%s", hwId0.c_str());
+            RCLCPP_INFO(get_logger(), "Cam L Unique ID=%s", hwId1.c_str());
         }
         else{
             CamL=cam1;
             CamR=cam0;
+            RCLCPP_INFO(get_logger(), "Cam L Unique ID=%s", hwId1.c_str());
+            RCLCPP_INFO(get_logger(), "Cam L Unique ID=%s", hwId0.c_str());
         }
         std::string profile;
         // get the OSP profile configuration
@@ -349,9 +353,9 @@ CameraNode::CameraNode(const rclcpp::NodeOptions &options) : Node("camera_node",
     //     "camera_get_property_details",
     //     std::bind(&CameraNode::camera_get_property_details_callback, this, _1, _2));
 
-    camera_left_frame_pub = create_publisher<sensor_msgs::msg::Image>("camera_frame_left", 1);
+    camera_left_frame_pub = create_publisher<sensor_msgs::msg::Image>("left/image_rect", 1);
     if(deviceCount==2){
-        camera_right_frame_pub = create_publisher<sensor_msgs::msg::Image>("camera_frame_right", 1);
+        camera_right_frame_pub = create_publisher<sensor_msgs::msg::Image>("right/image_rect", 1);
     }
 
     if(deviceCount==2){
