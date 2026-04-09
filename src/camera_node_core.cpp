@@ -117,7 +117,7 @@ void CameraNode::camera_frame_callback_stereo()
     auto base_message = sensor_msgs::msg::Image();
     
     base_message.header = std_msgs::msg::Header();
-    base_message.header.stamp = rclcpp::Clock(RCL_ROS_TIME).now();
+    base_message.header.stamp = this->get_clock()->now();
     // base_message.encoding = cvmat_type_to_str[frameL.type()];
     base_message.encoding = "bgr8";
     base_message.height = frameL.rows;
@@ -128,8 +128,8 @@ void CameraNode::camera_frame_callback_stereo()
     auto right_message = base_message;
     left_message.data.assign(frameL.datastart, frameL.dataend);
     right_message.data.assign(frameR.datastart, frameR.dataend);
-    left_message.header.frame="left_cam_frame";
-    right_message.header.frame="right_cam_frame";
+    left_message.header.frame_id="left_cam_frame";
+    right_message.header.frame_id="right_cam_frame";
 
     camera_left_frame_pub->publish(left_message);
     camera_right_frame_pub->publish(right_message);
