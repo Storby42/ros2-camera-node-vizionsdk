@@ -128,8 +128,8 @@ void CameraNode::camera_frame_callback_stereo()
     auto right_message = base_message;
     left_message.data.assign(frameL.datastart, frameL.dataend);
     right_message.data.assign(frameR.datastart, frameR.dataend);
-    left_message.header.frame_id="cam_frame_left";
-    right_message.header.frame_id="cam_frame_right";
+    left_message.header.frame_id="camera_frame_left";
+    right_message.header.frame_id="camera_frame_right";
 
     camera_left_frame_pub->publish(left_message);
     camera_right_frame_pub->publish(right_message);
