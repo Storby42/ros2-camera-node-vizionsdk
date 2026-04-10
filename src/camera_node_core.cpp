@@ -128,8 +128,8 @@ void CameraNode::camera_frame_callback_stereo()
     auto right_message = base_message;
     left_message.data.assign(frameL.datastart, frameL.dataend);
     right_message.data.assign(frameR.datastart, frameR.dataend);
-    left_message.header.frame_id="left_cam_frame";
-    right_message.header.frame_id="right_cam_frame";
+    left_message.header.frame_id="cam_frame_left";
+    right_message.header.frame_id="cam_frame_right";
 
     camera_left_frame_pub->publish(left_message);
     camera_right_frame_pub->publish(right_message);
@@ -295,13 +295,13 @@ CameraNode::CameraNode(const rclcpp::NodeOptions &options) : Node("camera_node",
             CamL=cam0;
             CamR=cam1;
             RCLCPP_INFO(get_logger(), "Cam L Unique ID=%s", hwId0.c_str());
-            RCLCPP_INFO(get_logger(), "Cam L Unique ID=%s", hwId1.c_str());
+            RCLCPP_INFO(get_logger(), "Cam R Unique ID=%s", hwId1.c_str());
         }
         else{
             CamL=cam1;
             CamR=cam0;
             RCLCPP_INFO(get_logger(), "Cam L Unique ID=%s", hwId1.c_str());
-            RCLCPP_INFO(get_logger(), "Cam L Unique ID=%s", hwId0.c_str());
+            RCLCPP_INFO(get_logger(), "Cam R Unique ID=%s", hwId0.c_str());
         }
         std::string profile;
         // get the OSP profile configuration
