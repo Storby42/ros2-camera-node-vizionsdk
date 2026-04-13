@@ -272,8 +272,8 @@ CameraNode::CameraNode(const rclcpp::NodeOptions &options) : Node("camera_node",
     // Initialize device
     rcl_interfaces::msg::ParameterDescriptor param_descriptor;
     param_descriptor.read_only = true;
-    declare_parameter<std::string>("camera_id_left", "16FDC8814A810146", param_descriptor);
-    declare_parameter<std::string>("camera_id_right", "A8A63008A012A184", param_descriptor);
+    declare_parameter<std::string>("camera_id_left", "000000008085264C16FDC8814A810146", param_descriptor);
+    declare_parameter<std::string>("camera_id_right", "00000000B00CA48CA8A63008A012A184", param_descriptor);
 
     std::vector<std::string> dev_list;
     int deviceCount = VxDiscoverCameraDevices(dev_list);
